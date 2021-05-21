@@ -65,9 +65,14 @@ def main(args):
     mask=cv2.imread(m_path,0)
     mask=utils.scaling(mask,scale=args.mask_scale)
     
-    
-    idx_y,idx_x=np.where(mask>0)
-    x1_m,y1_m,x2_m,y2_m=np.min(idx_x),np.min(idx_y),np.max(idx_x),np.max(idx_y)
+    if args.crop:
+        idx_y,idx_x=np.where(mask>0)
+        x1_m,y1_m,x2_m,y2_m=np.min(idx_x),np.min(idx_y),np.max(idx_x),np.max(idx_y)
+    else:
+        x1_m,y1_m=0,0
+        y2_m,x2_m=mask.shape
+        x2_m,y2_m=8*(x2_m //8),8*(y2_m //8)
+        
     x1_m =8*(x1_m //8)
     x2_m =8*(x2_m //8)
     y1_m =8*(y1_m //8)
@@ -82,8 +87,7 @@ def main(args):
     mask_crop=np.where(mask_crop>0,255,0).astype(np.uint8)
     kernel = np.ones((15,15),np.uint8)
     mask_dilated=cv2.dilate(mask_crop,kernel,iterations = 1)
-    mat_dilated=fore*np.expand_dims(mask_dilated/255,axis=-1)
-
+    
 
     origin=cv2.cvtColor(cv2.imread(bg_path),cv2.COLOR_BGR2RGB)
     h_origin,w_origin,_ = origin.shape
@@ -107,6 +111,7 @@ def main(args):
         x2 = w_origin
         
     print("hidden region...,height-{}:{},width-{}:{}".format(y1,y2,x1,x2))
+    mat_dilated=fore*np.expand_dims(mask_crop/255,axis=-1)+origin[y1:y2,x1:x2]*np.expand_dims((mask_dilated-mask_crop)/255,axis=-1)
     bg=origin.copy()
     bg[y1:y2,x1:x2] = fore*np.expand_dims(mask_crop/255,axis=-1) + origin[y1:y2,x1:x2]*np.expand_dims(1-mask_crop/255,axis=-1)
     
@@ -131,7 +136,6 @@ def main(args):
     for u,layer in enumerate(attention_layers):
         target_feature = target_features[layer].detach().cpu().numpy()  # output image's feature map after layer
         attention=attention_map_cv(target_feature)
-        print(attention.shape)
         h,w=attention.shape
         if "conv3" in layer:
             attention=cv2.resize(attention,(w//2,h//2))
@@ -142,6 +146,13 @@ def main(args):
     all_attention /= 5
     max_att,min_att = np.max(all_attention),np.min(all_attention)
     all_attention = (all_attention-min_att) / (max_att-min_att)
+    if args.erode_border:
+        h,w=all_attention.shape
+        mask_erode=cv2.erode(mask_crop,kernel,iterations = 3)
+        mask_erode=cv2.resize(mask_erode,(w,h))
+        mask_erode=np.where(mask_erode>0,1,0)
+        all_attention=all_attention*mask_erode
+        
     foreground_attention= torch.from_numpy(all_attention.astype(np.float32)).clone().to(device)
     b,ch,h,w=foreground_features["conv4_1"].shape
 
@@ -190,7 +201,7 @@ def main(args):
         #############################
         target_features_content = utils.get_features(target, VGG,mode="content") 
         content_loss = torch.sum((target_features_content['conv4_2'] - foreground_features['conv4_2']) ** 2) / 2
-
+        content_loss *= args.lambda_weights["content"]
 
         #############################
         ### style loss      #########
@@ -207,12 +218,12 @@ def main(args):
             #layer_style_loss = style_weights[layer] * torch.mean((target_gram_matrix - style_gram_matrix) ** 2) 
             style_loss += layer_style_loss
 
-
+        style_loss *= args.lambda_weights["style"]
         
         #############################
         ### camouflage loss #########
         #############################
-
+        b,ch,h,w=target_features["conv4_1"].shape
         target_cosine=np.zeros([b,ch,h,h])
         for k in range(ch):
             cos_matrix=cosine_similarity((foreground_attention*target_features["conv4_1"][0,k,:]).detach().cpu().numpy())
@@ -228,6 +239,7 @@ def main(args):
         remove_loss = (torch.mean(remove_matrix**2)/2).to(device)
 
         camouflage_loss = leave_loss + args.mu*remove_loss
+        camouflage_loss *= args.lambda_weights["cam"]
         
         #############################
         ### regularization loss #####
@@ -239,17 +251,17 @@ def main(args):
         target_reconst = torch.from_numpy((Weight_Matrix*target_renormalize).astype(np.float32))
         target_renormalize= torch.from_numpy(target_renormalize.astype(np.float32))
         reg_loss = mse(target_renormalize,target_reconst).to(device)
-        
+        reg_loss *= args.lambda_weights["reg"]
         
         #############################
         ### total variation loss ####
         #############################
         
         tv_loss=total_variation_loss(target,True)
-        
+        tv_loss*=args.lambda_weights["tv"]
 
         
-        total_loss = args.lambda_weights["content"]*content_loss + args.lambda_weights["style"]*style_loss + args.lambda_weights["cam"]*camouflage_loss + args.lambda_weights["reg"]*reg_loss + args.lambda_weights["tv"]*tv_loss
+        total_loss = content_loss + style_loss + camouflage_loss + reg_loss + tv_loss
         total_loss_epoch.append(total_loss)
 
         style_loss_epoch.append(style_loss)
@@ -262,21 +274,27 @@ def main(args):
         if epoch % show_every == 0:
             print("After %d criterions:" % epoch)
             print('Total loss: ', total_loss.item())
+            print('Style loss: ', style_loss.item())
             print('camouflage loss: ', camouflage_loss.item())
             print('regularization loss: ', reg_loss.item())
             print('total variation loss: ', tv_loss.item())
-            print('Style loss: ', style_loss.item())
             print('content loss: ', content_loss.item())
             print("elapsed time:{}".format(datetime.datetime.now()-time_start))
             canvas=origin.copy()
             fore_gen=utils.im_convert(target) * 255.
+            sub_canvas = np.vstack([mat_dilated,fore_gen,origin[y1:y2,x1:x2]])
             canvas[y1:y2,x1:x2]=fore_gen*np.expand_dims(mask_norm,axis=-1) + origin[y1:y2,x1:x2]*np.expand_dims(1.0-mask_norm,axis=-1)
-            new_path=os.path.join(camouflage_dir,"{}_epoch{}.png".format(args.name,epoch))
             canvas=canvas.astype(np.uint8)
-            cv2.imwrite(new_path,cv2.cvtColor(canvas,cv2.COLOR_RGB2BGR))
+            if args.save_process:
+                new_path=os.path.join(camouflage_dir,"{}_epoch{}.png".format(args.name,epoch))
+                cv2.imwrite(new_path,cv2.cvtColor(canvas,cv2.COLOR_RGB2BGR))
             cv2.rectangle(canvas,(x1,y1),(x2,y2),(255,0,0),10)
             cv2.rectangle(canvas,(x1-x1_m,y1-y1_m),(x2,y2),(255,255,0),10)
             canvas=np.vstack([canvas,bg])
+            h_c,w_c,_=canvas.shape
+            h_s,w_s,_=sub_canvas.shape
+            sub_canvas=cv2.resize(sub_canvas,(int(w_s*(h_c/h_s)),h_c))
+            canvas = np.hstack([sub_canvas,canvas])
             canvas=canvas.astype(np.uint8)
             canvas=cv2.cvtColor(canvas,cv2.COLOR_RGB2BGR)
             h_show,w_show,c=canvas.shape
