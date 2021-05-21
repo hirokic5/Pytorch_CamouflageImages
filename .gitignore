@@ -1,0 +1,8 @@
+videos/
+weights/
+outputs/
+images/
+__pycache__
+.ipynb_checkpoints
+__pycache__
+*.bat
