@@ -11,26 +11,15 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import datetime
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_distances,cosine_similarity
 from sklearn.manifold import LocallyLinearEmbedding
 from sklearn.neighbors import NearestNeighbors
 from sklearn.manifold.locally_linear import barycenter_kneighbors_graph
 
-
 import HRNet
-import utils
 from hidden_recommend import recommend
-from loss import calc_attentionmap,cosine_distance,total_variation_loss,calc_weightMatrix
+from utils import scaling,get_features,im_convert,attention_map_cv,gram_matrix_slice
 
-
-def attention_map_cv(img):
-    saliency = cv2.saliency.StaticSaliencySpectralResidual_create()
-    _,ch,h,w=img.shape
-    att_cv=np.zeros((h,w))
-    for j in range(ch):
-        (success, saliencyMap) = saliency.computeSaliency(img[0,j,:,:])
-        att_cv += saliencyMap
-    return att_cv
 
 def main(args):
     i_path=args.input_path
@@ -63,7 +52,7 @@ def main(args):
     style_weights = args.style_weight_dic
             
     mask=cv2.imread(m_path,0)
-    mask=utils.scaling(mask,scale=args.mask_scale)
+    mask=scaling(mask,scale=args.mask_scale)
     
     if args.crop:
         idx_y,idx_x=np.where(mask>0)
@@ -79,7 +68,7 @@ def main(args):
     y2_m =8*(y2_m //8)
     
     fore_origin=cv2.cvtColor(cv2.imread(i_path),cv2.COLOR_BGR2RGB)
-    fore_origin=utils.scaling(fore_origin,scale=args.mask_scale)
+    fore_origin=scaling(fore_origin,scale=args.mask_scale)
     fore=fore_origin[y1_m:y2_m,x1_m:x2_m]
    
     
@@ -117,16 +106,29 @@ def main(args):
     
     content_image = transform(image=mat_dilated)["image"].unsqueeze(0)
     style_image = transform(image=origin[y1:y2,x1:x2])["image"].unsqueeze(0)
-    #style_image = transform(image=cv2.resize(origin,(x2-x1,y2-y1)))["image"].unsqueeze(0)
     content_image = content_image.to(device)
     style_image = style_image.to(device)
 
-    style_features   = utils.get_features(style_image, VGG,mode="style")
-    style_gram_matrixs = {layer: utils.get_gram_matrix(style_features[layer]) for layer in style_features}
+    style_features   = get_features(style_image, VGG,mode="style")
+    if args.style_all:
+        style_image_all = transform(image=origin)["image"].unsqueeze(0).to(device)
+        style_features   = get_features(style_image_all, VGG,mode="style")
+    
+    style_gram_matrixs = {}
+    style_index = {}
+    for layer in style_features:
+        sf = style_features[layer]
+        _,_,h_sf,w_sf = sf.shape
+        mask_sf = (cv2.resize(mask_dilated,(w_sf,h_sf))).flatten()
+        sf_idxes = np.where(mask_sf>0)[0]
+        gram_matrix = gram_matrix_slice(sf,sf_idxes)
+        style_gram_matrixs[layer]=gram_matrix
+        style_index[layer]=sf_idxes
+    
 
     target = content_image.clone().requires_grad_(True).to(device)
 
-    foreground_features=utils.get_features(content_image, VGG,mode="camouflage")
+    foreground_features=get_features(content_image, VGG,mode="camouflage")
     target_features = foreground_features.copy()
     attention_layers=[
         "conv3_1","conv3_2","conv3_3","conv3_4",
@@ -138,7 +140,7 @@ def main(args):
         attention=attention_map_cv(target_feature)
         h,w=attention.shape
         if "conv3" in layer:
-            attention=cv2.resize(attention,(w//2,h//2))
+            attention=cv2.resize(attention,(w//2,h//2))*1/4
         if u== 0:
             all_attention = attention
         else:
@@ -153,18 +155,19 @@ def main(args):
         mask_erode=np.where(mask_erode>0,1,0)
         all_attention=all_attention*mask_erode
         
-    foreground_attention= torch.from_numpy(all_attention.astype(np.float32)).clone().to(device)
+    foreground_attention= torch.from_numpy(all_attention.astype(np.float32)).clone().to(device).unsqueeze(0).unsqueeze(0)
     b,ch,h,w=foreground_features["conv4_1"].shape
-
-    foreground_cosine=np.zeros([b,ch,h,h])
-    for k in range(ch):
-        cos_matrix=cosine_similarity((foreground_attention*foreground_features["conv4_1"][0,k,:]).detach().cpu().numpy())
-        cos_matrix /= (np.sum(cos_matrix)+1e-10)
-        foreground_cosine[0,k,:]=1-cos_matrix
-
-    foreground_cosine = torch.from_numpy(foreground_cosine.astype(np.float32)).clone().to(device)
-
-    background_features=utils.get_features(style_image, VGG,mode="camouflage")
+    mask_f = cv2.resize(mask_dilated,(w,h)) / 255
+    idx=np.where(mask_f>0)
+    size=len(idx[0])
+    mask_f = torch.from_numpy(mask_f.astype(np.float32)).clone().to(device).unsqueeze(0).unsqueeze(0)
+    
+    
+    foreground_chi = foreground_features["conv4_1"] * foreground_attention
+    foreground_chi = foreground_chi.detach().cpu().numpy()[0].transpose(1,2,0)
+    foreground_cosine = cosine_distances(foreground_chi[idx])
+    
+    background_features=get_features(style_image, VGG,mode="camouflage")
     
     idxes=np.where(mask_dilated>0)
     n_neighbors,n_jobs,reg=7,None,1e-3
@@ -175,6 +178,10 @@ def main(args):
     Weight_Matrix = barycenter_kneighbors_graph(
                 nbrs, n_neighbors=n_neighbors, reg=reg, n_jobs=n_jobs)
     
+    idx_new = np.where(idxes[0]<(y2-y1-1))
+    idxes_h = (idxes[0][idx_new],idxes[1][idx_new])
+    idx_new = np.where(idxes[1]<(x2-x1-1))
+    idxes_w = (idxes[0][idx_new],idxes[1][idx_new])
     
     mask_norm=mask_crop/255.
     
@@ -194,12 +201,12 @@ def main(args):
         target.requires_grad_(True)
 
 
-        target_features = utils.get_features(target, VGG)  # extract output image's all feature maps
+        target_features = get_features(target, VGG)  # extract output image's all feature maps
         
         #############################
         ### content loss    #########
         #############################
-        target_features_content = utils.get_features(target, VGG,mode="content") 
+        target_features_content = get_features(target, VGG,mode="content") 
         content_loss = torch.sum((target_features_content['conv4_2'] - foreground_features['conv4_2']) ** 2) / 2
         content_loss *= args.lambda_weights["content"]
 
@@ -211,32 +218,31 @@ def main(args):
         # compute each layer's style loss and add them
         for layer in style_weights:
             target_feature = target_features[layer]  # output image's feature map after layer
-            target_gram_matrix = utils.get_gram_matrix(target_feature)
+            #target_gram_matrix = get_gram_matrix(target_feature)
+            target_gram_matrix = gram_matrix_slice(target_feature,style_index[layer])
             style_gram_matrix = style_gram_matrixs[layer]
             b, c, h, w = target_feature.shape
             layer_style_loss = style_weights[layer] * torch.sum((target_gram_matrix - style_gram_matrix) ** 2) / ((2*c*w*h)**2)
             #layer_style_loss = style_weights[layer] * torch.mean((target_gram_matrix - style_gram_matrix) ** 2) 
             style_loss += layer_style_loss
 
-        style_loss *= args.lambda_weights["style"]
+        style_loss *= args.lambda_weights["style"] * args.beta
         
         #############################
         ### camouflage loss #########
         #############################
-        b,ch,h,w=target_features["conv4_1"].shape
-        target_cosine=np.zeros([b,ch,h,h])
-        for k in range(ch):
-            cos_matrix=cosine_similarity((foreground_attention*target_features["conv4_1"][0,k,:]).detach().cpu().numpy())
-            cos_matrix /= (np.sum(cos_matrix)+1e-10)
-            target_cosine[0,k,:]=1-cos_matrix
-
-        target_cosine = torch.from_numpy(target_cosine.astype(np.float32)).clone().to(device)
-
-        leave_loss = (torch.mean(torch.abs(target_cosine-foreground_cosine))/2).to(device)
-        remove_matrix=torch.empty([b,ch,h,w])
-        for k in range(ch):
-            remove_matrix[0,k,:] = (1.0-foreground_attention)*(target_features["conv4_1"][0,k,:]-background_features["conv4_1"][0,k,:])
+        target_chi = target_features["conv4_1"] * foreground_attention
+        target_chi = target_chi.detach().cpu().numpy()[0].transpose(1,2,0)
+        target_cosine = cosine_distances(target_chi[idx])
+        
+        leave_loss = (np.mean(np.abs(target_cosine-foreground_cosine))/2)
+        leave_loss = torch.Tensor([leave_loss]).to(device)
+        
+        remove_matrix= (1.0-foreground_attention)*mask_f*(target_features["conv4_1"]-background_features["conv4_1"])
+        r_min,r_max=torch.min(remove_matrix),torch.max(remove_matrix)
+        remove_matrix = (remove_matrix-r_min) / (r_max-r_min)
         remove_loss = (torch.mean(remove_matrix**2)/2).to(device)
+
 
         camouflage_loss = leave_loss + args.mu*remove_loss
         camouflage_loss *= args.lambda_weights["cam"]
@@ -256,8 +262,11 @@ def main(args):
         #############################
         ### total variation loss ####
         #############################
-        
-        tv_loss=total_variation_loss(target,True)
+        tv_h = torch.pow(target[:,:,1:,:]-target[:,:,:-1,:], 2).detach().cpu().numpy()[0].transpose(1,2,0)
+        tv_w = torch.pow(target[:,:,:,1:]-target[:,:,:,:-1], 2).detach().cpu().numpy()[0].transpose(1,2,0)
+        tv_h_mask=tv_h[:,:,0][idxes_h]+tv_h[:,:,1][idxes_h]+tv_h[:,:,2][idxes_h]
+        tv_w_mask=tv_w[:,:,0][idxes_w]+tv_w[:,:,2][idxes_w]+tv_w[:,:,2][idxes_w]
+        tv_loss=torch.from_numpy((np.array(np.mean(np.concatenate([tv_h_mask,tv_w_mask]))))).to(device)
         tv_loss*=args.lambda_weights["tv"]
 
         
@@ -276,12 +285,14 @@ def main(args):
             print('Total loss: ', total_loss.item())
             print('Style loss: ', style_loss.item())
             print('camouflage loss: ', camouflage_loss.item())
+            print('camouflage loss leave: ', leave_loss.item())
+            print('camouflage loss remove: ', remove_loss.item())
             print('regularization loss: ', reg_loss.item())
             print('total variation loss: ', tv_loss.item())
             print('content loss: ', content_loss.item())
             print("elapsed time:{}".format(datetime.datetime.now()-time_start))
             canvas=origin.copy()
-            fore_gen=utils.im_convert(target) * 255.
+            fore_gen=im_convert(target) * 255.
             sub_canvas = np.vstack([mat_dilated,fore_gen,origin[y1:y2,x1:x2]])
             canvas[y1:y2,x1:x2]=fore_gen*np.expand_dims(mask_norm,axis=-1) + origin[y1:y2,x1:x2]*np.expand_dims(1.0-mask_norm,axis=-1)
             canvas=canvas.astype(np.uint8)
@@ -309,7 +320,7 @@ def main(args):
     print('totally cost:{}'.format(time_end - time_start))
     new_path=os.path.join(camouflage_dir,"{}.png".format(args.name))
     canvas=origin.copy()
-    fore_gen=utils.im_convert(target) * 255.
+    fore_gen=im_convert(target) * 255.
     canvas[y1:y2,x1:x2]=fore_gen*np.expand_dims(mask_norm,axis=-1) + origin[y1:y2,x1:x2]*np.expand_dims(1.0-mask_norm,axis=-1)
     canvas=canvas.astype(np.uint8)
     canvas=cv2.cvtColor(canvas,cv2.COLOR_RGB2BGR)
