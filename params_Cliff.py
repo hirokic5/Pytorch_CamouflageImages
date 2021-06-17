@@ -5,6 +5,7 @@ class CFG:
     output_dir="samples/outputs/HRNet/Cliff_kuma"
     name="camouflage"
     mask_scale=0.25
+    seed=150
     
     epoch=1000
     lr=5e-3

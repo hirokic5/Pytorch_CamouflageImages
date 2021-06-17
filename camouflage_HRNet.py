@@ -25,7 +25,7 @@ def main(args):
     i_path=args.input_path
     m_path=args.mask_path
     bg_path=args.bg_path
-    
+    torch.manual_seed(args.seed)
 
     camouflage_dir=args.output_dir
     os.makedirs(camouflage_dir,exist_ok=True)
