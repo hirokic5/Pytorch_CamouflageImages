@@ -29,7 +29,7 @@ class CFG:
     lambda_weights={
         "content":0,
         "style":1.0,
-        "cam":5e-3,
+        "cam":1e0,
         "reg":1e0,
         "tv":1e-1
     }

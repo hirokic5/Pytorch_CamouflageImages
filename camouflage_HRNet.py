@@ -184,6 +184,9 @@ def main(args):
     idxes_w = (idxes[0][idx_new],idxes[1][idx_new])
     
     mask_norm=mask_crop/255.
+    mask_norm_torch = torch.from_numpy((mask_norm).astype(np.float32)).unsqueeze(0).unsqueeze(0).to(device)
+    boundary = (mask_dilated-mask_crop) / 255
+    boundary = torch.from_numpy((boundary).astype(np.float32)).unsqueeze(0).unsqueeze(0).to(device)
     
 
     content_loss_epoch = []
@@ -197,7 +200,11 @@ def main(args):
     steps = args.epoch
     mse = nn.MSELoss()
     while epoch <= steps:
+        #############################
+        ### boundary conceal ########
+        #############################
         target = style_net(content_image).to(device)
+        target = content_image*boundary+target*mask_norm_torch
         target.requires_grad_(True)
 
 
