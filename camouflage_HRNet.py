@@ -25,7 +25,10 @@ def main(args):
     i_path=args.input_path
     m_path=args.mask_path
     bg_path=args.bg_path
+    np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.deterministic=True
 
     camouflage_dir=args.output_dir
     os.makedirs(camouflage_dir,exist_ok=True)
@@ -196,7 +199,6 @@ def main(args):
     epoch=0
     show_every = args.show_every
     optimizer = optim.Adam(style_net.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=0.9)
     steps = args.epoch
     mse = nn.MSELoss()
     while epoch <= steps:
@@ -233,7 +235,7 @@ def main(args):
             #layer_style_loss = style_weights[layer] * torch.mean((target_gram_matrix - style_gram_matrix) ** 2) 
             style_loss += layer_style_loss
 
-        style_loss *= args.lambda_weights["style"] * args.beta
+        style_loss *= args.lambda_weights["style"]
         
         #############################
         ### camouflage loss #########
@@ -285,8 +287,7 @@ def main(args):
         optimizer.zero_grad()
         total_loss.backward()
         optimizer.step()
-        scheduler.step()
-
+        
         if epoch % show_every == 0:
             print("After %d criterions:" % epoch)
             print('Total loss: ', total_loss.item())

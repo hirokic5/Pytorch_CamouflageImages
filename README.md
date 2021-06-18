@@ -1,12 +1,17 @@
 # Pytorch_CamouflageImages
 Generate Camouflage Images by Pytorch
-![Sample](https://user-images.githubusercontent.com/19792127/119169642-38c50580-ba9d-11eb-9ead-6e6a56356d8b.png)
-this implementation is mainly based on **[Deep Camouflage Images]**(http://zhangqing-home.net/files/papers/2020/aaai2020.pdf) 
+![Sample](samples/camouflages/camouflage_canyon.png)
+
+this implementation is mainly based on [Deep Camouflage Images](http://zhangqing-home.net/files/papers/2020/aaai2020.pdf) 
 
 ## Usage
 ```python camouflage_HRNet.py --params <path to parameter python file>```
 
-For quick test, you can generate camouflage images by ```python camouflage_HRNet.py --params params_Cliff```
+For quick test, you can generate camouflage images by ```python camouflage_HRNet.py --params params_Canyon```
+
+Here is process window
+
+![cliff](samples/camouflages/window.png)|
 
 ### Dependencies
 - PyTorch (>= 1.7)
@@ -32,6 +37,7 @@ For custom images, you should prepare
 - input_path : path to foreground image
 - mask_path : path to foreground image mask
 - bg_path : path to background image
+- output_dir : directory for generated images
 - name : prefix name for generated image
 - seed : pytorch seed
 ```
@@ -47,7 +53,6 @@ For custom images, you should prepare
 ```
 - epoch : iteration for training
 - lr : learning rate for adam
-- step_size : step size for LR Scheduler
 ```
 
 **loss setting**
@@ -69,7 +74,7 @@ For custom images, you should prepare
 ```
 
 ## Influence by loss function
-According to **[Deep Camouflage Images]**(http://zhangqing-home.net/files/papers/2020/aaai2020.pdf), losses has following impact for generated image:
+According to [Deep Camouflage Images](http://zhangqing-home.net/files/papers/2020/aaai2020.pdf), losses has following impact for generated image:
 
 - style loss : control similarity between generated image and background image
 - camouflage loss : control diffuculty for detection of camouflage objects in generated image
@@ -78,8 +83,16 @@ According to **[Deep Camouflage Images]**(http://zhangqing-home.net/files/papers
 - reguralization loss : control consistency for generated image
 - total variation loss : smooth generated image
 
+|style|style+cam|style+cam+reg|style+cam+reg+tv|
+|---|---|---|---|
+|![style](samples/camouflages/camouflage_style.png)|![style+cam](samples/camouflages/camouflage_style+cam.png)|![style+cam+reg](samples/camouflages/camouflage_style+cam+reg.png)|![style+cam+reg+tv](samples/camouflages/camouflage_canyon.png)|
 
 ## Gallary
-With fix of seed, generated camouflage images could be duplicated **for some extent (not comletely** ...)
 
+|SeaMountain|CliffRiver|
+|---|---|
+|![seamountain](samples/camouflages/camouflage_seamountain.png)|![cliffriver](samples/camouflages/camouflage_cliffriver.png)|
 
+|Mountain|Cliff|
+|---|---|
+|![mountain](samples/camouflages/camouflage_mountain.png)|![canyon](samples/camouflages/camouflage_cliff.png)|
