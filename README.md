@@ -27,8 +27,8 @@ Here is process window
 For custom images, you should prepare 
 - background image (ex. samples/inputs/cliff.jpg)
 - foreground image (ex. samples/inputs/kuma.png)
-- foreground mask image (ex.samples/inputs/kuma_mask/png)
-    - the size of foreground mask image must be **same as that of foreground image** !
+- foreground image mask (ex.samples/inputs/kuma_mask/png)
+    - the size of foreground image mask must be **same as that of foreground image** !
 - .py file with parameters corresponding for your data (ex. params_Cliff.py)
 
 ## Parameters
@@ -83,9 +83,13 @@ According to [Deep Camouflage Images](http://zhangqing-home.net/files/papers/202
 - reguralization loss : control consistency for generated image
 - total variation loss : smooth generated image
 
-|style|style+cam|style+cam+reg|style+cam+reg+tv|
-|---|---|---|---|
-|![style](samples/camouflages/camouflage_style.png)|![style+cam](samples/camouflages/camouflage_style+cam.png)|![style+cam+reg](samples/camouflages/camouflage_style+cam+reg.png)|![style+cam+reg+tv](samples/camouflages/camouflage_canyon.png)|
+|style|style+cam|
+|---|---|
+|![style](samples/camouflages/camouflage_style.png)|![style+cam](samples/camouflages/camouflage_style+cam.png)|
+
+|style+cam+reg|style+cam+reg+tv|
+|---|---|
+|![style+cam+reg](samples/camouflages/camouflage_style+cam+reg.png)|![style+cam+reg+tv](samples/camouflages/camouflage_canyon.png)|
 
 ## Gallary
 
