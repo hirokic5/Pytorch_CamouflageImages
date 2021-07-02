@@ -8,12 +8,24 @@ this implementation is mainly based on [Deep Camouflage Images](http://zhangqing
 
 ## Usage
 ### Setup Environment
+<details>
+<summary> Dependencies </summary>
+
+- PyTorch (>= 1.7)
+- torchvision
+- tqdm
+- albumentations
+- scikit-learn==0.23.2
+- opencv-contrib
+</details>
+
 In the case of conda.
+
 ```
 conda create -n camouflage python=3.8
 conda activate camouflage
 ```
-and then, install pytorch / torchvision, reference [official website](https://pytorch.org/get-started/locally/)
+and then, install pytorch / torchvision, reference to [official website](https://pytorch.org/get-started/locally/)
 
 finally, install dependent libraries
 ```
@@ -29,13 +41,6 @@ Here is process window
 
 ![cliff](samples/camouflages/window.png)|
 
-### Dependencies
-- PyTorch (>= 1.7)
-- torchvision
-- tqdm
-- albumentations
-- scikit-learn==0.23.2
-- opencv-contrib
 
 ### Preparaion
 For custom images, you should prepare 
