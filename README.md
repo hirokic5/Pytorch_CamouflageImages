@@ -1,10 +1,26 @@
 # Pytorch_CamouflageImages
 Generate Camouflage Images by Pytorch
+
+
 ![Sample](samples/camouflages/camouflage_canyon.png)
 
 this implementation is mainly based on [Deep Camouflage Images](http://zhangqing-home.net/files/papers/2020/aaai2020.pdf) 
 
 ## Usage
+### Setup Environment
+In the cas of conda.
+```
+conda create -n camouflage python=3.8
+conda activate camouflage
+```
+and then, install pytorch / torchvision, reference [official website](https://pytorch.org/get-started/locally/)
+
+finally, install dependent libraries
+```
+pip install -r requirements.txt
+```
+
+### Test
 ```python camouflage_HRNet.py --params <path to parameter python file>```
 
 For quick test, you can generate camouflage images by ```python camouflage_HRNet.py --params params_Canyon```
@@ -16,12 +32,10 @@ Here is process window
 ### Dependencies
 - PyTorch (>= 1.7)
 - torchvision
-- opencv-contrib
-- pillow
-- scikit-learn
-- scikit-image
 - tqdm
 - albumentations
+- scikit-learn==0.23.2
+- opencv-contrib
 
 ### Preparaion
 For custom images, you should prepare 

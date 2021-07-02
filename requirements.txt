@@ -1,0 +1,4 @@
+tqdm
+albumentations
+opencv-contrib-python
+scikit-learn==0.23.2
