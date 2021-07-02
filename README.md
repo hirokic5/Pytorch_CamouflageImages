@@ -8,7 +8,7 @@ this implementation is mainly based on [Deep Camouflage Images](http://zhangqing
 
 ## Usage
 ### Setup Environment
-In the cas of conda.
+In the case of conda.
 ```
 conda create -n camouflage python=3.8
 conda activate camouflage
