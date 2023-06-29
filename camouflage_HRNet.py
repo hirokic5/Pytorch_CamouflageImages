@@ -14,7 +14,9 @@ import datetime
 from sklearn.metrics.pairwise import cosine_distances,cosine_similarity
 from sklearn.manifold import LocallyLinearEmbedding
 from sklearn.neighbors import NearestNeighbors
-from sklearn.manifold.locally_linear import barycenter_kneighbors_graph
+# upgrade sklearn to latest version to avoid numpy type deprecation problem
+# new version of sklearn requires to load barycenter_kneighbors_graph from sklearn.manifold._locally_linear
+from sklearn.manifold._locally_linear import barycenter_kneighbors_graph
 
 import HRNet
 from hidden_recommend import recommend

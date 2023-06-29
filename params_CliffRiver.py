@@ -2,7 +2,7 @@ class CFG:
     ########################
     #### initial setting ###
     ########################
-    input_path="samples/inputs/kuma.png "
+    input_path="samples/inputs/kuma.png"
     mask_path="samples/inputs/kuma_mask.png"
     bg_path="samples/inputs/cliff_river.png"
     output_dir="samples/outputs/HRNet/CliffRiver_kuma"

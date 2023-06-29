@@ -63,7 +63,8 @@ class BasicBlock(nn.Module):
             residual = x
         else: 
             residual = self.shortcut(x)
-        out += residual
+        # https://discuss.pytorch.org/t/runtimeerror-one-of-the-variables-needed-for-gradient-computation-has-been-modified-by-an-inplace-operation-torch-floattensor-64-1-which-is-output-0-of-asstridedbackward0-is-at-version-3-expected-version-2-instead-hint-the-backtrace-further-a/171826/7
+        out = out + residual
         out = self.relu(out)
 
         return out
