@@ -15,7 +15,7 @@ this implementation is mainly based on [Deep Camouflage Images](http://zhangqing
 - torchvision
 - tqdm
 - albumentations
-- scikit-learn==0.23.2
+- scikit-learn
 - opencv-contrib
 </details>
 
@@ -89,17 +89,17 @@ For custom images, you should prepare
 ```
 - show_every : interval for displaying intermediate result
 - save_process : If True, save intermediate result by every `show_every`
-- show_comp : compressino ratio for display
+- show_comp : compression ratio for display
 ```
 
 ## Influence by loss function
 According to [Deep Camouflage Images](http://zhangqing-home.net/files/papers/2020/aaai2020.pdf), losses has following impact for generated image:
 
 - style loss : control similarity between generated image and background image
-- camouflage loss : control diffuculty for detection of camouflage objects in generated image
+- camouflage loss : control difficulty for detection of camouflage objects in generated image
     - leave loss : leave foreground features in generated image
     - remove loss : remove foreground features in generated image
-- reguralization loss : control consistency for generated image
+- regularization loss : control consistency for generated image
 - total variation loss : smooth generated image
 
 |style|style+cam|

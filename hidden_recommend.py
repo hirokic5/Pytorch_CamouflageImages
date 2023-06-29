@@ -43,7 +43,7 @@ def HOG(img):
     # Gradient histogram
     def quantization(gradient):
         # prepare quantization table
-        gradient_quantized = np.zeros_like(gradient, dtype=np.int)
+        gradient_quantized = np.zeros_like(gradient, dtype=int) # np.int is deprecated after 1.20
 
         # quantization base
         d = np.pi / 9
